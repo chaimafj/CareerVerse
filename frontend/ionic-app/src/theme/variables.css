@@ -1,0 +1,9 @@
+:root {
+  --ion-background-color: #f3f4f6;
+  --ion-background-color-rgb: 243, 244, 246;
+  --ion-text-color: #111827;
+  --ion-text-color-rgb: 17, 24, 39;
+  --ion-item-background: #ffffff;
+  --ion-item-border-color: rgba(148, 163, 184, 0.35);
+  --ion-font-family: 'Segoe UI', sans-serif;
+}

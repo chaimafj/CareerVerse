@@ -229,14 +229,4 @@ Les prochaines évolutions envisagées sont :
 
 CareerVerse est un projet de plateforme de guidance professionnelle orienté étudiant. Sa force réside dans sa structure claire, son architecture modulaire et son potentiel d’évolution. Il permet de présenter une solution complète, cohérente et évolutive avec un frontend moderne, un backend fiable et une logique métier orientée métier / carrière.
 
-## 13. Équipe / statut
 
-Projet de développement en architecture full-stack avec :
-- frontend Ionic + Angular
-- backend Django + DRF
-- design d’interface orienté expérience utilisateur
-- logique de parcours et recommandations en cours de structuration
-
----
-
-Le projet a été nettoyé pour conserver uniquement les éléments utiles au développement de l’application. Les fichiers hérités du scaffold React/Vite ont été supprimés afin de garder une architecture plus claire, cohérente et professionnelle.

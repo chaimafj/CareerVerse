@@ -583,6 +583,14 @@ export class LoginPage {
       }))
       .subscribe({
         next: async (response) => {
+          const user = response?.user ?? {
+            email: this.credentials.email,
+            first_name: '',
+            last_name: '',
+          };
+
+          this.authService.setCurrentUser(user);
+
           const message = response.message ?? 'Login successful.';
           await this.showMessage(message);
           this.router.navigateByUrl('/dashboard');

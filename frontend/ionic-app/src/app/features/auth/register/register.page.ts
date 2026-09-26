@@ -553,9 +553,31 @@ export class RegisterPage {
       }))
       .subscribe({
         next: async (response) => {
+          const user = response?.user ?? {
+            first_name: this.form.firstName,
+            last_name: this.form.lastName,
+            email: this.form.email,
+            username: this.form.email.split('@')[0],
+          };
+
+          this.authService.setCurrentUser(user);
+
           const message = response.message ?? 'Account created successfully.';
           await this.showMessage(message);
-          this.router.navigateByUrl('/dashboard');
+
+          this.authService
+            .login({
+              email: this.form.email,
+              password: this.form.password,
+            })
+            .subscribe({
+              next: (loginResponse) => {
+                const loggedUser = loginResponse?.user ?? user;
+                this.authService.setCurrentUser(loggedUser);
+                this.router.navigateByUrl('/dashboard');
+              },
+              error: () => this.router.navigateByUrl('/dashboard'),
+            });
         },
         error: async (error) => {
           const details = error?.error ?? 'An error occurred while creating the account.';

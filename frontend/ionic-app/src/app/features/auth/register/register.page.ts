@@ -561,6 +561,7 @@ export class RegisterPage {
           };
 
           this.authService.setCurrentUser(user);
+          this.authService.setToken(response?.token);
 
           const message = response.message ?? 'Account created successfully.';
           await this.showMessage(message);
@@ -574,7 +575,8 @@ export class RegisterPage {
               next: (loginResponse) => {
                 const loggedUser = loginResponse?.user ?? user;
                 this.authService.setCurrentUser(loggedUser);
-                this.router.navigateByUrl('/dashboard');
+                this.authService.setToken(loginResponse?.token);
+                this.router.navigateByUrl('/dashboard/assessment');
               },
               error: () => this.router.navigateByUrl('/dashboard'),
             });

@@ -1,6 +1,9 @@
 import { Component, HostListener, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import {
+  AI_LABS, CAREER_INFO, CareerAiService, CareerScore, LabAttemptsSummary, Recommendation,
+} from '../../core/services/career-ai.service';
 
 @Component({
   selector: 'app-dashboard-page',
@@ -32,16 +35,16 @@ import { AuthService } from '../../core/services/auth.service';
             <span class="nav-icon">◫</span>
             <span>Career Labs</span>
           </button>
-          <button class="nav-item" type="button">
-            <span class="nav-icon">⎍</span>
-            <span>My Performance</span>
+          <button class="nav-item" type="button" routerLink="/dashboard/assessment">
+            <span class="nav-icon">☰</span>
+            <span>Assessment</span>
           </button>
-          <button class="nav-item" type="button">
-            <span class="nav-icon">◌</span>
-            <span>Recommendations</span>
-          </button>
-          <button class="nav-item" type="button">
+          <button class="nav-item" type="button" routerLink="/dashboard/results">
             <span class="nav-icon">✦</span>
+            <span>AI Results</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/learning">
+            <span class="nav-icon">❖</span>
             <span>Learning Path</span>
           </button>
         </nav>
@@ -110,7 +113,7 @@ import { AuthService } from '../../core/services/auth.service';
               </p>
 
               <div class="hero-actions">
-                <button class="primary-btn" type="button">Start Exploring <span aria-hidden="true">→</span></button>
+                <button class="primary-btn" type="button" (click)="startJourney()">{{ nextStep.label }} <span aria-hidden="true">→</span></button>
                 <button class="secondary-btn" type="button"><span class="play-icon">▶</span> Watch Video</button>
               </div>
             </div>
@@ -148,14 +151,14 @@ import { AuthService } from '../../core/services/auth.service';
               </div>
 
               <div class="stat-score-row">
-                <div class="stat-score">78%</div>
-                <div class="donut-ring">
-                  <div class="donut-inner">78%</div>
+                <div class="stat-score">{{ completion }}%</div>
+                <div class="donut-ring" [style.background]="'conic-gradient(#6a6cf6 ' + completion * 3.6 + 'deg, #e3e8f6 0deg)'">
+                  <div class="donut-inner">{{ completion }}%</div>
                 </div>
               </div>
 
-              <p>See how your skills and interests match with different careers.</p>
-              <button class="card-button" type="button">View Profile →</button>
+              <p>Your assessment: studies, self-rated skills and interests used by the AI.</p>
+              <button class="card-button" type="button" routerLink="/dashboard/assessment">{{ completion === 100 ? 'Review assessment' : 'Complete assessment' }} →</button>
             </article>
 
             <article class="stat-card green-card">
@@ -165,12 +168,12 @@ import { AuthService } from '../../core/services/auth.service';
               </div>
 
               <div class="stat-score-row compact-row">
-                <div class="stat-score mini">3/4</div>
+                <div class="stat-score mini">{{ labsDone }}/9</div>
                 <div class="label-complete">Completed</div>
               </div>
 
-              <p>Match code hands-on simulations and gain real-world experience.</p>
-              <button class="card-button" type="button">Explore Labs →</button>
+              <p>Hands-on simulations. Each completed lab makes the AI recommendation more reliable.</p>
+              <button class="card-button" type="button" routerLink="/dashboard/career-lab">Explore Labs →</button>
             </article>
 
             <article class="stat-card green-soft-card">
@@ -180,12 +183,12 @@ import { AuthService } from '../../core/services/auth.service';
               </div>
 
               <div class="stat-score-row compact-row">
-                <div class="stat-score mini">4</div>
-                <div class="label-complete">Matches</div>
+                <div class="stat-score mini">{{ topCareers.length ? (topCareers[0].probability * 100 | number:'1.0-0') + '%' : '–' }}</div>
+                <div class="label-complete">{{ topCareers.length ? shortName(topCareers[0].career) : 'Not analysed yet' }}</div>
               </div>
 
-              <p>Careers that match your profile and performance.</p>
-              <button class="card-button" type="button">View Recommendations →</button>
+              <p>Careers that match your profile and lab performance, ranked by the AI model.</p>
+              <button class="card-button" type="button" routerLink="/dashboard/results">View Recommendations →</button>
             </article>
 
             <article class="stat-card peach-card">
@@ -195,12 +198,12 @@ import { AuthService } from '../../core/services/auth.service';
               </div>
 
               <div class="stat-score-row compact-row">
-                <div class="stat-score mini">73%</div>
-                <div class="label-complete">Growth</div>
+                <div class="stat-score mini">{{ averageScore === null ? '–' : (averageScore | number:'1.0-0') + '%' }}</div>
+                <div class="label-complete">Avg. lab score</div>
               </div>
 
-              <p>Track your skills, performance and growth over time.</p>
-              <button class="card-button" type="button">View Progress →</button>
+              <p>Your average score across the AI-analysed Career Labs you completed.</p>
+              <button class="card-button" type="button" routerLink="/dashboard/results">View Progress →</button>
             </article>
           </section>
 
@@ -208,52 +211,30 @@ import { AuthService } from '../../core/services/auth.service';
             <div class="recommended-panel">
               <div class="section-head">
                 <h2>Recommended Careers</h2>
-                <button class="view-link" type="button">View all →</button>
+                <button class="view-link" type="button" routerLink="/dashboard/results">View all →</button>
               </div>
 
-              <div class="cards-row">
-                <article class="career-card">
-                  <div class="career-art cloud-art">
-                    <span class="art-symbol">☁</span>
+              <div class="cards-row" *ngIf="topCareers.length; else noRecommendation">
+                <article class="career-card" *ngFor="let c of topCareers; let i = index">
+                  <div class="career-art" [ngClass]="artClasses[i]">
+                    <span class="art-symbol">{{ careerInfo(c.career).icon }}</span>
                   </div>
-                  <h3>Cloud Engineer</h3>
-                  <p>Design, deploy and manage cloud infrastructure.</p>
-                  <div class="match-pill">91% match</div>
+                  <h3>{{ c.career }}</h3>
+                  <p>{{ careerInfo(c.career).summary }}</p>
+                  <div class="match-pill">{{ c.probability * 100 | number:'1.0-0' }}% match</div>
                   <div class="tag-row">
-                    <span>AWS</span>
-                    <span>Linux</span>
-                    <span>Docker</span>
-                  </div>
-                </article>
-
-                <article class="career-card">
-                  <div class="career-art devops-art">
-                    <span class="art-symbol">⟲</span>
-                  </div>
-                  <h3>DevOps Engineer</h3>
-                  <p>Automate, deploy and monitor applications.</p>
-                  <div class="match-pill">87% match</div>
-                  <div class="tag-row">
-                    <span>Docker</span>
-                    <span>Kubernetes</span>
-                    <span>CI/CD</span>
-                  </div>
-                </article>
-
-                <article class="career-card">
-                  <div class="career-art backend-art">
-                    <span class="art-symbol">&lt;/&gt;</span>
-                  </div>
-                  <h3>Backend Developer</h3>
-                  <p>Build and maintain server-side applications.</p>
-                  <div class="match-pill">72% match</div>
-                  <div class="tag-row">
-                    <span>Python</span>
-                    <span>Djange</span>
-                    <span>API</span>
+                    <span *ngFor="let t of careerInfo(c.career).tags">{{ t }}</span>
                   </div>
                 </article>
               </div>
+
+              <ng-template #noRecommendation>
+                <div class="empty-reco">
+                  <h3>No recommendation yet</h3>
+                  <p>Complete your assessment and a few Career Labs, then run the AI analysis to see your top 3 careers here.</p>
+                  <button type="button" class="view-more-btn" (click)="startJourney()">{{ nextStep.label }}</button>
+                </div>
+              </ng-template>
 
               <div class="view-more-row">
                 <button type="button" class="view-more-btn" (click)="goToCareerExplorer()">
@@ -264,42 +245,18 @@ import { AuthService } from '../../core/services/auth.service';
 
             <aside class="learning-panel">
               <div class="section-head">
-                <h2>Your Learning Path</h2>
-                <button class="view-link" type="button">View full path →</button>
+                <h2>Your Path</h2>
+                <button class="view-link" type="button" routerLink="/dashboard/learning">Learning path →</button>
               </div>
 
               <ol class="learning-list">
-                <li class="complete">
-                  <span class="list-check">✓</span>
+                <li *ngFor="let step of steps; let i = index" [class.complete]="step.done" [class.active]="!step.done && step === nextStep">
+                  <span class="list-check">{{ step.done ? '✓' : i + 1 }}</span>
                   <div class="item-copy">
-                    <span>1. Complete your profile</span>
-                    <small>You’ve finished your profile. Great job!</small>
+                    <span>{{ i + 1 }}. {{ step.title }}</span>
+                    <small>{{ step.detail }}</small>
                   </div>
-                  <time>Apr 12, 2025</time>
-                </li>
-                <li class="active">
-                  <span class="list-check">2</span>
-                  <div class="item-copy">
-                    <span>2. Explore career labs</span>
-                    <small>Start with 3 recommended labs.</small>
-                  </div>
-                  <button class="start-btn" type="button">Start Now →</button>
-                </li>
-                <li>
-                  <span class="list-check">3</span>
-                  <div class="item-copy">
-                    <span>3. Analyze your results</span>
-                    <small>Get AI insights and recommendations.</small>
-                  </div>
-                  <time>Apr 15, 2025</time>
-                </li>
-                <li>
-                  <span class="list-check">4</span>
-                  <div class="item-copy">
-                    <span>4. Follow your learning path</span>
-                    <small>Fill the skill gaps and grow your career.</small>
-                  </div>
-                  <time>May 02, 2025</time>
+                  <button *ngIf="!step.done && step === nextStep" class="start-btn" type="button" [routerLink]="step.link">Start Now →</button>
                 </li>
               </ol>
             </aside>
@@ -308,34 +265,21 @@ import { AuthService } from '../../core/services/auth.service';
           <section class="activity-panel">
             <div class="section-head">
               <h2>Latest Activity</h2>
-              <button class="view-link" type="button">View all →</button>
+              <button class="view-link" type="button" routerLink="/dashboard/results">View all →</button>
             </div>
 
-            <div class="activity-grid">
-              <article class="activity-item">
-                <div class="activity-icon cloud-mini">☁</div>
+            <div class="activity-grid" *ngIf="activities.length; else noActivity">
+              <article class="activity-item" *ngFor="let a of activities">
+                <div class="activity-icon" [ngClass]="a.iconClass">{{ a.icon }}</div>
                 <div class="activity-copy">
-                  <strong>You completed the Cloud Lab</strong>
+                  <strong>{{ a.text }}</strong>
                 </div>
-                <span class="activity-time">2 hours ago</span>
-              </article>
-
-              <article class="activity-item">
-                <div class="activity-icon profile-mini">✦</div>
-                <div class="activity-copy">
-                  <strong>Your AI profile has been updated</strong>
-                </div>
-                <span class="activity-time">5 hours ago</span>
-              </article>
-
-              <article class="activity-item">
-                <div class="activity-icon badge-mini">◔</div>
-                <div class="activity-copy">
-                  <strong>You earned a new skill: Docker</strong>
-                </div>
-                <span class="activity-time">1 day ago</span>
+                <span class="activity-time">{{ a.date | date:'d MMM, HH:mm' }}</span>
               </article>
             </div>
+            <ng-template #noActivity>
+              <p class="empty-activity">Nothing yet. Your completed labs and AI analyses will appear here.</p>
+            </ng-template>
           </section>
         </main>
 
@@ -1341,6 +1285,9 @@ import { AuthService } from '../../core/services/auth.service';
         min-height: 44px;
       }
 
+      .empty-reco { display: grid; gap: 10px; justify-items: start; padding: 18px; border-radius: 18px; background: rgba(255,255,255,0.6); border: 1px dashed rgba(130, 149, 211, 0.6); }
+      .empty-reco h3 { margin: 0; }
+      .empty-reco p, .empty-activity { margin: 0; color: #4f628b; line-height: 1.6; }
       .match-pill {
         display: inline-flex;
         align-items: center;
@@ -1552,9 +1499,78 @@ export class DashboardPage implements OnInit {
   userInitials = 'U';
   userAvatar = '';
 
-  constructor(private router: Router, private authService: AuthService) {}
+  // Données réelles venant du backend
+  completion = 0;
+  labs: LabAttemptsSummary | null = null;
+  recommendation: Recommendation | null = null;
+  readonly artClasses = ['cloud-art', 'devops-art', 'backend-art'];
+
+  constructor(private router: Router, private authService: AuthService, private careerAi: CareerAiService) {}
+
+  get labsDone(): number {
+    return this.labs?.labs_done ?? 0;
+  }
+
+  get averageScore(): number | null {
+    const scores = Object.values(this.labs?.latest ?? {}).map((a) => a.score);
+    return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+  }
+
+  get topCareers(): CareerScore[] {
+    return this.recommendation?.top_careers ?? [];
+  }
+
+  get steps(): { title: string; detail: string; done: boolean; link: string; label: string }[] {
+    return [
+      { title: 'Complete your assessment', detail: `${this.completion}% answered: studies, skills and interests.`,
+        done: this.completion === 100, link: '/dashboard/assessment', label: 'Complete my assessment' },
+      { title: 'Explore Career Labs', detail: `${this.labsDone}/9 AI labs done. Aim for at least 4.`,
+        done: this.labsDone >= 4, link: '/dashboard/career-lab', label: 'Start a Career Lab' },
+      { title: 'Run the AI analysis', detail: this.recommendation ? 'Your top 3 careers are ready.' : 'Get your top 3 careers from the model.',
+        done: !!this.recommendation, link: '/dashboard/results', label: 'See my AI results' },
+      { title: 'Follow your learning path', detail: 'Fill the skill gaps for your top career.',
+        done: false, link: '/dashboard/learning', label: 'Open my learning path' },
+    ];
+  }
+
+  get nextStep() {
+    return this.steps.find((s) => !s.done) ?? this.steps[this.steps.length - 1];
+  }
+
+  get activities(): { text: string; date: string; icon: string; iconClass: string }[] {
+    const items = (this.labs?.history ?? []).slice(0, 3).map((a) => ({
+      text: `You completed the ${AI_LABS[a.career_id]?.career ?? a.lab_key} lab · ${Math.round(a.score)}/100`,
+      date: a.created_at, icon: '◫', iconClass: 'cloud-mini',
+    }));
+    if (this.recommendation) {
+      items.push({
+        text: `AI analysis: ${this.recommendation.top_careers[0].career} ranked first`,
+        date: this.recommendation.created_at, icon: '✦', iconClass: 'profile-mini',
+      });
+    }
+    return items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+  }
+
+  careerInfo(career: string) {
+    return CAREER_INFO[career] ?? { careerId: '', icon: '★', summary: '', tags: [] };
+  }
+
+  shortName(career: string): string {
+    return career.replace(' Developer', ' Dev').replace(' Engineer', ' Eng.').replace(' Administrator', ' Admin');
+  }
+
+  startJourney(): void {
+    this.router.navigateByUrl(this.nextStep.link);
+  }
+
+  private loadAiData(): void {
+    this.careerAi.getProfile().subscribe({ next: (p) => (this.completion = p.completion ?? 0), error: () => undefined });
+    this.careerAi.getLabAttempts().subscribe({ next: (l) => (this.labs = l), error: () => undefined });
+    this.careerAi.getLatestRecommendation().subscribe({ next: (r) => (this.recommendation = r), error: () => undefined });
+  }
 
   ngOnInit(): void {
+    this.loadAiData();
     const user = this.authService.getCurrentUser();
     const profile = this.authService.getProfile();
 
@@ -1584,6 +1600,7 @@ export class DashboardPage implements OnInit {
 
   logout(): void {
     this.isProfileMenuOpen = false;
+    this.authService.logout();
     this.router.navigateByUrl('/auth/login');
   }
 

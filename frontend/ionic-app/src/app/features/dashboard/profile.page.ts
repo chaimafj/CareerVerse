@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { CareerAiService } from '../../core/services/career-ai.service';
 
 @Component({
   selector: 'app-profile-page',
@@ -31,6 +32,14 @@ import { AuthService } from '../../core/services/auth.service';
           <button class="nav-item" type="button" routerLink="/dashboard/career-lab">
             <span class="nav-icon">◫</span>
             <span>Career Labs</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/assessment">
+            <span class="nav-icon">☰</span>
+            <span>Assessment</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/results">
+            <span class="nav-icon">✦</span>
+            <span>AI Results</span>
           </button>
           <button class="nav-item" type="button">
             <span class="nav-icon">⎍</span>
@@ -255,7 +264,7 @@ import { AuthService } from '../../core/services/auth.service';
             <article id="skills" class="panel-card skills-panel">
               <div class="panel-header">
                 <h3>AI Profile</h3>
-                <span class="last-updated">Last updated: Apr 12, 2025</span>
+                <span class="last-updated">{{ skillsUpdatedAt ? 'From your assessment · ' + (skillsUpdatedAt | date:'d MMM y') : 'Not assessed yet' }}</span>
               </div>
 
               <div class="skill-list">
@@ -1457,14 +1466,15 @@ export class ProfilePage implements OnInit {
   };
 
   aiSkills = [
-    { name: 'Programming', level: 85, icon: '◌', color: '#3b5ef6', bar: 'linear-gradient(90deg, #4c78ff 0%, #7ea8ff 100%)' },
-    { name: 'Cloud', level: 72, icon: '☁', color: '#2da7a1', bar: 'linear-gradient(90deg, #30baa8 0%, #88d7ca 100%)' },
-    { name: 'DevOps', level: 68, icon: '⟲', color: '#5d5ae7', bar: 'linear-gradient(90deg, #5f7afc 0%, #8ea2ff 100%)' },
-    { name: 'Cybersecurity', level: 60, icon: '◈', color: '#d7678f', bar: 'linear-gradient(90deg, #ef5d8e 0%, #f9a7b7 100%)' },
-    { name: 'Problem Solving', level: 85, icon: '◍', color: '#2da27d', bar: 'linear-gradient(90deg, #29b678 0%, #7ed7a4 100%)' },
-    { name: 'Analytical Skills', level: 82, icon: '▣', color: '#5c8ff2', bar: 'linear-gradient(90deg, #5dc9d8 0%, #7be7dc 100%)' },
-    { name: 'Teamwork', level: 76, icon: '✦', color: '#8057d0', bar: 'linear-gradient(90deg, #8b5cf6 0%, #c7a7ff 100%)' },
+    { key: 'programming', name: 'Programming', level: 0, icon: '◌', color: '#3b5ef6', bar: 'linear-gradient(90deg, #4c78ff 0%, #7ea8ff 100%)' },
+    { key: 'cloud', name: 'Cloud', level: 0, icon: '☁', color: '#2da7a1', bar: 'linear-gradient(90deg, #30baa8 0%, #88d7ca 100%)' },
+    { key: 'docker_k8s', name: 'DevOps', level: 0, icon: '⟲', color: '#5d5ae7', bar: 'linear-gradient(90deg, #5f7afc 0%, #8ea2ff 100%)' },
+    { key: 'security', name: 'Cybersecurity', level: 0, icon: '◈', color: '#d7678f', bar: 'linear-gradient(90deg, #ef5d8e 0%, #f9a7b7 100%)' },
+    { key: 'problem_solving', name: 'Problem Solving', level: 0, icon: '◍', color: '#2da27d', bar: 'linear-gradient(90deg, #29b678 0%, #7ed7a4 100%)' },
+    { key: 'math_stats', name: 'Analytical Skills', level: 0, icon: '▣', color: '#5c8ff2', bar: 'linear-gradient(90deg, #5dc9d8 0%, #7be7dc 100%)' },
+    { key: 'systems_thinking', name: 'Systems Thinking', level: 0, icon: '✦', color: '#8057d0', bar: 'linear-gradient(90deg, #8b5cf6 0%, #c7a7ff 100%)' },
   ];
+  skillsUpdatedAt = '';
 
   readonly interestOptions = ['Technology', 'Innovation', 'Problem Solving', 'Collaboration'];
   readonly workEnvironmentOptions = [
@@ -1479,9 +1489,21 @@ export class ProfilePage implements OnInit {
   showInterestOptions = false;
   showWorkEnvironmentOptions = false;
 
-  constructor(private authService: AuthService, private router: Router) {}
+  constructor(private authService: AuthService, private router: Router, private careerAi: CareerAiService) {}
+
+  /** Les niveaux affichés viennent de l'auto-évaluation du questionnaire (0-10 -> 0-100 %). */
+  private loadSkillLevels(): void {
+    this.careerAi.getProfile().subscribe({
+      next: (p) => {
+        this.aiSkills = this.aiSkills.map((s) => ({ ...s, level: (p.self_ratings?.[s.key] ?? 0) * 10 }));
+        this.skillsUpdatedAt = Object.keys(p.self_ratings ?? {}).length ? p.updated_at ?? '' : '';
+      },
+      error: () => undefined,
+    });
+  }
 
   ngOnInit(): void {
+    this.loadSkillLevels();
     const storedUser = this.authService.getCurrentUser();
     const storedProfile = this.authService.getProfile();
 
@@ -1604,7 +1626,7 @@ export class ProfilePage implements OnInit {
   }
 
   logout(): void {
-    this.authService.clearCurrentUser();
+    this.authService.logout();
     this.isProfileMenuOpen = false;
     this.router.navigateByUrl('/auth/login');
   }

@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { AI_LABS, CareerAiService, LabAttemptsSummary } from '../../core/services/career-ai.service';
 
 interface MissionItem {
   id: string;
@@ -51,6 +52,14 @@ interface CareerLabItem {
             <span class="nav-icon">◫</span>
             <span>Career Labs</span>
             <span class="nav-arrow">›</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/assessment">
+            <span class="nav-icon">☰</span>
+            <span>Assessment</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/results">
+            <span class="nav-icon">✦</span>
+            <span>AI Results</span>
           </button>
           <button class="nav-item" type="button" routerLink="/dashboard/learning">
             <span class="nav-icon">✦</span>
@@ -146,10 +155,10 @@ interface CareerLabItem {
             <article class="stat-card pink-card">
               <div class="stat-header">
                 <span class="stat-icon">▣</span>
-                <span class="stat-label">Score</span>
+                <span class="stat-label">AI labs done</span>
               </div>
-              <div class="stat-value">88%</div>
-              <small>Performance</small>
+              <div class="stat-value">{{ aiLabsDone }}/9</div>
+              <small>{{ averageScore === null ? 'No AI lab completed yet' : 'Average score ' + (averageScore | number:'1.0-0') + '/100' }}</small>
             </article>
           </section>
 
@@ -193,14 +202,20 @@ interface CareerLabItem {
                   <span class="career-icon" [style.background]="career.accent">{{ career.icon }}</span>
                   <span class="career-text">
                     <strong>{{ career.title }}</strong>
-                    <small>{{ career.missions.length }} lab</small>
+                    <small>{{ career.missions.length }} missions</small>
                   </span>
+                </div>
+
+                <div class="lab-status">
+                  <span class="ai-tag" *ngIf="isAiLab(career.id); else practiceOnly">Analysed by AI</span>
+                  <ng-template #practiceOnly><span class="practice-tag">Practice only</span></ng-template>
+                  <span class="done-tag" *ngIf="labScore(career.id) !== null">Done · {{ labScore(career.id) | number:'1.0-0' }}/100</span>
                 </div>
 
                 <p>{{ career.description }}</p>
 
                 <button class="view-lab-btn" type="button" (click)="startMission(career.id, career.missions[0].id); $event.stopPropagation()">
-                  View lab
+                  {{ labScore(career.id) !== null ? 'Retry lab' : 'Start lab' }}
                 </button>
               </article>
             </div>
@@ -436,6 +451,11 @@ interface CareerLabItem {
       .career-text strong { font-size: 1.02rem; }
       .career-text small { color: #5d6d8d; }
       .career-card p { margin: 0; color: #4f628b; line-height: 1.6; }
+      .lab-status { display: flex; flex-wrap: wrap; gap: 6px; }
+      .ai-tag, .practice-tag, .done-tag { font-size: 0.75rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+      .ai-tag { background: rgba(89, 212, 169, 0.16); color: #127a55; }
+      .practice-tag { background: #eef1f7; color: #5d6d8d; }
+      .done-tag { background: rgba(107, 108, 246, 0.12); color: #4b4fd6; }
       .view-lab-btn {
         border: 0; border-radius: 999px; padding: 11px 16px; background: linear-gradient(90deg, #5b7dff 0%, #7b61ff 35%, #ff73c9 100%);
         color: #fff; font-weight: 700; cursor: pointer; justify-self: start; min-width: 118px;
@@ -521,9 +541,9 @@ export class CareerLabPage implements OnInit {
     },
     {
       id: 'data-analyst',
-      title: 'Data Analyst',
+      title: 'Data Scientist',
       icon: '▤',
-      description: 'Analyze trends, uncover meaning and help teams translate numbers into decisions.',
+      description: 'Analyze data, uncover trends and turn numbers into predictions and decisions.',
       accent: '#ffb454',
       missions: [
         { id: 'data-analyst-lab-1', title: 'Lab 1', subtitle: 'KPI dashboard', duration: '17 min', difficulty: 'Intermediate', description: 'Transform raw data into insights, dashboards and focused recommendations.', tags: ['Analytics', 'SQL', 'Dashboards'], progress: 0 },
@@ -603,7 +623,75 @@ export class CareerLabPage implements OnInit {
         { id: 'business-analyst-lab-3', title: 'Lab 3', subtitle: 'Decision support', duration: '23 min', difficulty: 'Advanced', description: 'Support strategy decisions with a clear evidence and impact model.', tags: ['Decision', 'KPIs', 'Insights'], progress: 0 },
       ],
     },
+    {
+      id: 'frontend-developer',
+      title: 'Frontend/Web Developer',
+      icon: '◧',
+      description: 'Build fast, accessible and responsive interfaces that people enjoy using.',
+      accent: '#ff9f6b',
+      missions: [
+        { id: 'frontend-developer-lab-1', title: 'Lab 1', subtitle: 'Responsive landing page', duration: '6 min', difficulty: 'Beginner', description: 'Make a landing page work on every screen size.', tags: ['HTML', 'CSS', 'Responsive'], progress: 0 },
+        { id: 'frontend-developer-lab-2', title: 'Lab 2', subtitle: 'Accessible form', duration: '6 min', difficulty: 'Intermediate', description: 'Make a sign-up form usable with a keyboard and a screen reader.', tags: ['Accessibility', 'Forms', 'UX'], progress: 0 },
+        { id: 'frontend-developer-lab-3', title: 'Lab 3', subtitle: 'Page performance', duration: '6 min', difficulty: 'Intermediate', description: 'Cut the loading time of a slow home page.', tags: ['Performance', 'Images', 'Bundling'], progress: 0 },
+      ],
+    },
+    {
+      id: 'database-administrator',
+      title: 'Database Administrator',
+      icon: '▦',
+      description: 'Keep databases fast, safe and always available for the applications that rely on them.',
+      accent: '#5ba1ff',
+      missions: [
+        { id: 'database-administrator-lab-1', title: 'Lab 1', subtitle: 'Slow query', duration: '6 min', difficulty: 'Intermediate', description: 'Find why a report query takes 40 seconds and fix it.', tags: ['SQL', 'Indexes', 'Performance'], progress: 0 },
+        { id: 'database-administrator-lab-2', title: 'Lab 2', subtitle: 'Backup strategy', duration: '6 min', difficulty: 'Intermediate', description: 'Design backups so that almost no data can be lost.', tags: ['Backups', 'Recovery', 'Reliability'], progress: 0 },
+        { id: 'database-administrator-lab-3', title: 'Lab 3', subtitle: 'Access control', duration: '6 min', difficulty: 'Advanced', description: 'Secure a database shared by several applications.', tags: ['Security', 'Roles', 'Audit'], progress: 0 },
+      ],
+    },
+    {
+      id: 'network-admin',
+      title: 'System/Network Admin',
+      icon: '⇄',
+      description: 'Run the servers and networks that every team depends on, and fix them fast when they fail.',
+      accent: '#59d4a9',
+      missions: [
+        { id: 'network-admin-lab-1', title: 'Lab 1', subtitle: 'Office network', duration: '6 min', difficulty: 'Intermediate', description: 'Set up the network of a 60-person office.', tags: ['VLAN', 'DHCP', 'Firewall'], progress: 0 },
+        { id: 'network-admin-lab-2', title: 'Lab 2', subtitle: 'Connectivity incident', duration: '6 min', difficulty: 'Intermediate', description: 'Diagnose why users cannot reach a server.', tags: ['Troubleshooting', 'DNS', 'Routing'], progress: 0 },
+        { id: 'network-admin-lab-3', title: 'Lab 3', subtitle: 'Remote access', duration: '6 min', difficulty: 'Advanced', description: 'Give staff safe access to internal servers from home.', tags: ['VPN', 'SSH', 'MFA'], progress: 0 },
+      ],
+    },
+    {
+      id: 'qa-engineer',
+      title: 'QA/Test Engineer',
+      icon: '✓',
+      description: 'Find bugs before users do and keep software quality high release after release.',
+      accent: '#a78bff',
+      missions: [
+        { id: 'qa-engineer-lab-1', title: 'Lab 1', subtitle: 'Test plan', duration: '6 min', difficulty: 'Beginner', description: 'Plan the tests of a payment feature.', tags: ['Testing', 'Strategy', 'Pyramid'], progress: 0 },
+        { id: 'qa-engineer-lab-2', title: 'Lab 2', subtitle: 'Bug report', duration: '6 min', difficulty: 'Beginner', description: 'Write a bug report a developer can act on.', tags: ['Bugs', 'Reporting', 'Quality'], progress: 0 },
+        { id: 'qa-engineer-lab-3', title: 'Lab 3', subtitle: 'Test automation', duration: '6 min', difficulty: 'Intermediate', description: 'Make a flaky test suite reliable again.', tags: ['Automation', 'CI', 'Flaky tests'], progress: 0 },
+      ],
+    },
   ];
+
+  labs: LabAttemptsSummary | null = null;
+
+  isAiLab(careerId: string): boolean {
+    return !!AI_LABS[careerId];
+  }
+
+  labScore(careerId: string): number | null {
+    const lab = AI_LABS[careerId];
+    return (lab && this.labs?.latest[lab.labKey]?.score) ?? null;
+  }
+
+  get aiLabsDone(): number {
+    return this.labs?.labs_done ?? 0;
+  }
+
+  get averageScore(): number | null {
+    const scores = Object.values(this.labs?.latest ?? {}).map((a) => a.score);
+    return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+  }
 
   get selectedCareer(): CareerLabItem {
     return this.careers.find((career) => career.id === this.selectedCareerId) ?? this.careers[0];
@@ -611,11 +699,13 @@ export class CareerLabPage implements OnInit {
 
   get filteredCareers(): CareerLabItem[] {
     const q = this.query.trim().toLowerCase();
+    // Les 9 labs analysés par le modèle passent en premier
+    const ordered = [...this.careers].sort((a, b) => Number(this.isAiLab(b.id)) - Number(this.isAiLab(a.id)));
     if (!q) {
-      return this.careers;
+      return ordered;
     }
 
-    return this.careers.filter((career) =>
+    return ordered.filter((career) =>
       career.title.toLowerCase().includes(q) ||
       career.description.toLowerCase().includes(q) ||
       career.missions.some((mission) =>
@@ -630,9 +720,14 @@ export class CareerLabPage implements OnInit {
     return this.careers.reduce((total, career) => total + career.missions.length, 0);
   }
 
-  constructor(private router: Router, private authService: AuthService) {}
+  constructor(private router: Router, private authService: AuthService, private careerAi: CareerAiService) {}
 
   ngOnInit(): void {
+    this.careerAi.getLabAttempts().subscribe({
+      next: (labs) => (this.labs = labs),
+      error: () => (this.labs = null),
+    });
+
     const user = this.authService.getCurrentUser();
     const profile = this.authService.getProfile();
 

@@ -30,6 +30,14 @@ import { AuthService } from '../../core/services/auth.service';
             <span class="nav-icon">◫</span>
             <span>Career Labs</span>
           </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/assessment">
+            <span class="nav-icon">☰</span>
+            <span>Assessment</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/results">
+            <span class="nav-icon">✦</span>
+            <span>AI Results</span>
+          </button>
           <button class="nav-item" type="button">
             <span class="nav-icon">⎍</span>
             <span>My Performance</span>

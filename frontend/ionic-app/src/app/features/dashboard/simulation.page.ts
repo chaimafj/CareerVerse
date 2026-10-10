@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { AI_LABS, CareerAiService } from '../../core/services/career-ai.service';
 
 interface MissionSpec {
   id: string;
@@ -51,6 +52,14 @@ interface CareerSpec {
             <span>Career Labs</span>
             <span class="nav-arrow">›</span>
           </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/assessment">
+            <span class="nav-icon">☰</span>
+            <span>Assessment</span>
+          </button>
+          <button class="nav-item" type="button" routerLink="/dashboard/results">
+            <span class="nav-icon">✦</span>
+            <span>AI Results</span>
+          </button>
           <button class="nav-item" type="button" routerLink="/dashboard/learning">
             <span class="nav-icon">✦</span>
             <span>Learning Path</span>
@@ -99,8 +108,9 @@ interface CareerSpec {
         <main class="mission-shell">
           <section class="instruction-panel">
             <div class="panel-title-row">
-              <h2>{{ currentCareer.title }} — Mission {{ currentMissionIndex + 1 }}</h2>
+              <h2>{{ currentCareer.title }} — Mission {{ currentMissionIndex + 1 }}/{{ currentCareer.missions.length }}</h2>
               <span class="tiny-badge">{{ currentMission.title }}</span>
+              <span class="tiny-badge ai-badge" *ngIf="isAiLab">Analysed by AI</span>
             </div>
 
             <div class="instruction-copy">
@@ -129,15 +139,20 @@ interface CareerSpec {
             </div>
 
             <div class="feedback-box" *ngIf="feedbackText">
-              <strong>{{ isValid ? 'Bonne réponse !' : 'À corriger' }}</strong>
+              <strong>{{ isValid ? 'Bonne réponse !' : 'À corriger' }} · {{ missionScores[currentMissionIndex] | number:'1.0-0' }}/100</strong>
               <p>{{ feedbackText }}</p>
+            </div>
+
+            <div class="feedback-box hint-box" *ngIf="hintShown[currentMissionIndex]">
+              <strong>Indice</strong>
+              <p>{{ currentHint() }}</p>
             </div>
           </section>
 
           <section class="architecture-panel">
             <div class="panel-header">
               <h2>{{ getSimulationTitle() }}</h2>
-              <button class="help-btn" type="button" aria-label="Aide">?</button>
+              <button class="help-btn" type="button" aria-label="Afficher un indice" title="Afficher un indice (compte comme indice utilisé)" (click)="showHint()">?</button>
             </div>
 
             <ng-container *ngIf="currentMission.simulationType === 'architecture'; else alternateSimulation">
@@ -190,6 +205,32 @@ interface CareerSpec {
             </div>
           </section>
         </main>
+
+        <div class="finish-overlay" *ngIf="finishing" role="dialog" aria-modal="true" aria-labelledby="finish-title">
+          <div class="finish-card">
+            <h2 id="finish-title">Lab terminé : {{ currentCareer.title }}</h2>
+            <div class="finish-stats">
+              <div><span>Score</span><strong>{{ labScore | number:'1.0-0' }}/100</strong></div>
+              <div><span>Missions réussies</span><strong>{{ missionsCorrect }}/{{ currentCareer.missions.length }}</strong></div>
+              <div><span>Temps</span><strong>{{ elapsedLabel }}</strong></div>
+              <div><span>Validations</span><strong>{{ totalValidations }}</strong></div>
+              <div><span>Indices</span><strong>{{ hintsUsed }}</strong></div>
+            </div>
+            <p class="finish-question">Avez-vous aimé ce lab ?</p>
+            <div class="stars" role="radiogroup" aria-label="Plaisir de 1 à 5">
+              <button *ngFor="let v of [1,2,3,4,5]" type="button" role="radio" [attr.aria-checked]="enjoyment === v"
+                      [class.on]="enjoyment >= v" (click)="enjoyment = v">★</button>
+            </div>
+            <p class="finish-hint" *ngIf="!enjoyment">Choisissez une note de 1 à 5 étoiles pour enregistrer le lab : le modèle en a besoin.</p>
+            <p class="finish-error" *ngIf="submitError">{{ submitError }}</p>
+            <div class="finish-actions">
+              <button class="secondary-btn" type="button" (click)="finishing = false; labFinishedAt = 0">Revenir aux missions</button>
+              <button class="next-btn" type="button" [disabled]="!enjoyment || submitting" (click)="submitLab()">
+                {{ submitting ? 'Envoi…' : 'Enregistrer et voir mes résultats' }}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -424,6 +465,25 @@ interface CareerSpec {
       }
       .secondary-btn { background: rgba(255,255,255,0.08); color: #edf5ff; border: 1px solid rgba(143, 168, 230, 0.24); }
       .next-btn { background: linear-gradient(90deg, #5b7dff 0%, #7b61ff 35%, #ff73c9 100%); color: #fff; }
+      .next-btn:disabled { opacity: .5; cursor: not-allowed; }
+      .ai-badge { background: rgba(89, 212, 169, 0.18); color: #9df0cf; border: 1px solid rgba(89, 212, 169, 0.4); }
+      .hint-box { border-color: rgba(255, 200, 110, 0.45); background: rgba(255, 190, 90, 0.08); }
+      .finish-overlay { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; background: rgba(7, 18, 40, 0.72); }
+      .finish-card { width: min(560px, 100%); background: #fff; color: #1d2947; border-radius: 24px; padding: 26px; box-shadow: 0 30px 60px rgba(0,0,0,0.3); display: grid; gap: 14px; }
+      .finish-card h2 { margin: 0; font-size: 1.5rem; letter-spacing: -0.03em; }
+      .finish-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+      .finish-stats div { background: #f2f5fc; border-radius: 14px; padding: 10px 12px; display: grid; gap: 2px; }
+      .finish-stats span { font-size: 0.75rem; color: #5d6d8d; }
+      .finish-stats strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+      .finish-question { margin: 6px 0 0; font-weight: 700; }
+      .stars { display: flex; gap: 6px; }
+      .stars button { border: 0; background: none; font-size: 2rem; line-height: 1; color: #cfd6e6; cursor: pointer; padding: 2px; }
+      .stars button.on { color: #ffb400; }
+      .stars button:focus-visible { outline: 2px solid #7b61ff; border-radius: 6px; }
+      .finish-error { margin: 0; color: #c2412d; font-weight: 600; }
+      .finish-hint { margin: 0; color: #b46a00; font-size: 0.9rem; }
+      .finish-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+      .finish-actions .secondary-btn { color: #2e3f6d; border: 1px solid rgba(120, 140, 175, 0.7); background: #fff; }
 
       @media (max-width: 980px) {
         .simulation-shell { grid-template-columns: 1fr; }
@@ -487,12 +547,12 @@ export class SimulationPage implements OnInit {
     },
     {
       id: 'data-analyst',
-      title: 'Data Analyst',
+      title: 'Data Scientist',
       accent: '#ffb454',
       missions: [
-        { id: 'data-analyst-lab-1', title: 'Lab 1', description: 'KPI dashboard', instruction: 'Turn raw business data into a dashboard that supports growth decisions and identifies priorities.', availableServices: ['Power BI', 'SQL', 'Looker', 'Metrics', 'Dashboard'], expectedServices: ['Power BI', 'SQL', 'Metrics'], result: 'SQL extracts the data, Power BI turns it into insights and the KPI list supports faster business decisions.' },
-        { id: 'data-analyst-lab-2', title: 'Lab 2', description: 'Trend analysis', instruction: 'Identify which product or user trends matter most and explain the likely drivers behind them.', availableServices: ['Power BI', 'SQL', 'Looker', 'Metrics', 'Dashboard'], expectedServices: ['SQL', 'Dashboard', 'Metrics'], result: 'Trend analysis becomes clear when you combine time-based trends, metrics and visual storytelling.' },
-        { id: 'data-analyst-lab-3', title: 'Lab 3', description: 'Insight report', instruction: 'Draft a short, decision-ready report that explains findings and recommended action.', availableServices: ['Power BI', 'SQL', 'Looker', 'Metrics', 'Dashboard'], expectedServices: ['Dashboard', 'Metrics', 'Looker'], result: 'The clearest insight reports condense the story into key numbers, context and direction.' },
+        { id: 'data-analyst-lab-1', title: 'Lab 1', description: 'KPI dashboard', simulationType: 'problem', instruction: 'Turn raw business data into a dashboard that supports growth decisions and identifies priorities.', availableServices: ['Power BI', 'SQL', 'Looker', 'Metrics', 'Dashboard'], expectedServices: ['Power BI', 'SQL', 'Metrics'], result: 'SQL extracts the data, Power BI turns it into insights and the KPI list supports faster business decisions.' },
+        { id: 'data-analyst-lab-2', title: 'Lab 2', description: 'Trend analysis', simulationType: 'problem', instruction: 'Identify which product or user trends matter most and explain the likely drivers behind them.', availableServices: ['Power BI', 'SQL', 'Looker', 'Metrics', 'Dashboard'], expectedServices: ['SQL', 'Dashboard', 'Metrics'], result: 'Trend analysis becomes clear when you combine time-based trends, metrics and visual storytelling.' },
+        { id: 'data-analyst-lab-3', title: 'Lab 3', description: 'Insight report', simulationType: 'problem', instruction: 'Draft a short, decision-ready report that explains findings and recommended action.', availableServices: ['Power BI', 'SQL', 'Looker', 'Metrics', 'Dashboard'], expectedServices: ['Dashboard', 'Metrics', 'Looker'], result: 'The clearest insight reports condense the story into key numbers, context and direction.' },
       ],
     },
     {
@@ -555,6 +615,46 @@ export class SimulationPage implements OnInit {
         { id: 'business-analyst-lab-3', title: 'Lab 3', description: 'Decision support', instruction: 'Support a strategic decision using evidence, priorities and the right business metrics.', availableServices: ['Process Map', 'Requirements', 'Gap Analysis', 'KPIs', 'Stakeholder Notes'], expectedServices: ['KPIs', 'Gap Analysis', 'Stakeholder Notes'], result: 'Decision support is strongest when metrics, gaps and stakeholder insight are aligned.' },
       ],
     },
+    {
+      id: 'frontend-developer',
+      title: 'Frontend/Web Developer',
+      accent: '#ff9f6b',
+      missions: [
+        { id: 'frontend-developer-lab-1', title: 'Lab 1', description: 'Responsive landing page', simulationType: 'scenario', instruction: 'Build a landing page that looks right on phones, tablets and large screens.', availableServices: ['Semantic HTML', 'CSS Grid / Flexbox', 'Media queries', 'Fixed pixel widths everywhere', 'Tables for layout'], expectedServices: ['Semantic HTML', 'CSS Grid / Flexbox', 'Media queries'], result: 'Semantic HTML gives structure, Grid and Flexbox handle the layout, and media queries adapt it to each screen.' },
+        { id: 'frontend-developer-lab-2', title: 'Lab 2', description: 'Accessible form', simulationType: 'quiz', instruction: 'A sign-up form must be usable with a keyboard and a screen reader. Pick the right practices.', availableServices: ['Labels linked to inputs', 'Visible focus states', 'Placeholder instead of label', 'Error message next to the field', 'Color-only error signal'], expectedServices: ['Labels linked to inputs', 'Visible focus states', 'Error message next to the field'], result: 'Linked labels, visible focus and clear error text make the form usable by everyone.' },
+        { id: 'frontend-developer-lab-3', title: 'Lab 3', description: 'Page performance', simulationType: 'problem', instruction: 'The home page takes 6 seconds to load on mobile. Choose the fixes with the biggest effect.', availableServices: ['Lazy-load images', 'Minify and bundle assets', 'Load every script in the head', 'Compress images', 'Add more web fonts'], expectedServices: ['Lazy-load images', 'Minify and bundle assets', 'Compress images'], result: 'Lighter images loaded only when needed and smaller bundles cut most of the loading time.' },
+      ],
+    },
+    {
+      id: 'database-administrator',
+      title: 'Database Administrator',
+      accent: '#5ba1ff',
+      missions: [
+        { id: 'database-administrator-lab-1', title: 'Lab 1', description: 'Slow query', simulationType: 'problem', instruction: 'A report query now takes 40 seconds. Find what to do first.', availableServices: ['Add an index on the filtered column', 'Read the EXPLAIN plan', 'SELECT * everywhere', 'Add more RAM blindly', 'Avoid functions on indexed columns'], expectedServices: ['Add an index on the filtered column', 'Read the EXPLAIN plan', 'Avoid functions on indexed columns'], result: 'The execution plan shows the full scan; the right index, used without wrapping functions, removes it.' },
+        { id: 'database-administrator-lab-2', title: 'Lab 2', description: 'Backup strategy', simulationType: 'scenario', instruction: 'Design a backup plan so that no more than 5 minutes of data can ever be lost.', availableServices: ['Daily full backup', 'Point-in-time recovery logs', 'Test restores regularly', 'Keep backups on the same disk', 'Back up once a year'], expectedServices: ['Daily full backup', 'Point-in-time recovery logs', 'Test restores regularly'], result: 'Full backups plus transaction logs allow point-in-time recovery, and only tested restores prove it works.' },
+        { id: 'database-administrator-lab-3', title: 'Lab 3', description: 'Access control', simulationType: 'quiz', instruction: 'Three applications share one database server. Secure who can access what.', availableServices: ['One role per application', 'Least privilege grants', 'Shared root password', 'Audit logging', 'Public database port'], expectedServices: ['One role per application', 'Least privilege grants', 'Audit logging'], result: 'Separate roles with minimal rights and an audit trail limit the damage of any leak.' },
+      ],
+    },
+    {
+      id: 'network-admin',
+      title: 'System/Network Admin',
+      accent: '#59d4a9',
+      missions: [
+        { id: 'network-admin-lab-1', title: 'Lab 1', description: 'Office network', simulationType: 'scenario', instruction: 'Set up the network of a 60-person office with separate teams.', availableServices: ['VLAN per department', 'DHCP server', 'Flat network for everyone', 'Firewall between VLANs', 'Static IP typed by each user'], expectedServices: ['VLAN per department', 'DHCP server', 'Firewall between VLANs'], result: 'VLANs separate the teams, DHCP assigns addresses automatically, and the firewall controls traffic between them.' },
+        { id: 'network-admin-lab-2', title: 'Lab 2', description: 'Connectivity incident', simulationType: 'problem', instruction: 'Users cannot reach the intranet server. Choose your first diagnostic steps.', availableServices: ['Ping the gateway', 'Traceroute to the server', 'Check DNS resolution', 'Reboot every switch', 'Disable the firewall'], expectedServices: ['Ping the gateway', 'Traceroute to the server', 'Check DNS resolution'], result: 'Testing layer by layer (gateway, route, name resolution) locates the fault without breaking anything else.' },
+        { id: 'network-admin-lab-3', title: 'Lab 3', description: 'Remote access', simulationType: 'quiz', instruction: 'Staff must reach internal servers from home safely.', availableServices: ['VPN for remote staff', 'MFA for VPN users', 'Open RDP to the internet', 'Telnet for administration', 'SSH with keys'], expectedServices: ['VPN for remote staff', 'MFA for VPN users', 'SSH with keys'], result: 'An MFA-protected VPN and key-based SSH keep remote access encrypted and hard to abuse.' },
+      ],
+    },
+    {
+      id: 'qa-engineer',
+      title: 'QA/Test Engineer',
+      accent: '#a78bff',
+      missions: [
+        { id: 'qa-engineer-lab-1', title: 'Lab 1', description: 'Test plan', simulationType: 'scenario', instruction: 'A payment feature ships next week. Choose the test levels to plan.', availableServices: ['Unit tests', 'Integration tests', 'End-to-end tests', 'Test only in production', 'Skip regression tests'], expectedServices: ['Unit tests', 'Integration tests', 'End-to-end tests'], result: 'The test pyramid checks each function, how parts work together, and the full user journey.' },
+        { id: 'qa-engineer-lab-2', title: 'Lab 2', description: 'Bug report', simulationType: 'quiz', instruction: 'You found a crash in checkout. Choose what your bug report must contain.', availableServices: ['Steps to reproduce', 'Expected vs actual result', 'Environment and version', '“It does not work”', 'Blame the developer'], expectedServices: ['Steps to reproduce', 'Expected vs actual result', 'Environment and version'], result: 'A good report lets anyone reproduce the bug and see exactly what went wrong, where.' },
+        { id: 'qa-engineer-lab-3', title: 'Lab 3', description: 'Test automation', simulationType: 'problem', instruction: 'The automated suite fails randomly and nobody trusts it. Fix it.', availableServices: ['Run tests in CI on every commit', 'Stable test data', 'Fix flaky tests', 'Sleep 30 s in every test', 'Automate only manual clicks'], expectedServices: ['Run tests in CI on every commit', 'Stable test data', 'Fix flaky tests'], result: 'Reliable data, no flaky tests and a run on every commit make the suite trustworthy again.' },
+      ],
+    },
   ];
 
   currentCareerId = 'cloud-engineer';
@@ -567,7 +667,23 @@ export class SimulationPage implements OnInit {
   userInitials = 'U';
   userAvatar = '';
 
-  constructor(private route: ActivatedRoute, private router: Router, private authService: AuthService) {}
+  // Mesures envoyées au modèle CareerNet à la fin d'un lab analysé par l'IA
+  labStartedAt = Date.now();
+  labFinishedAt = 0;
+  validations: number[] = [];
+  missionScores: number[] = [];
+  hintShown: boolean[] = [];
+  finishing = false;
+  enjoyment = 0;
+  submitting = false;
+  submitError = '';
+
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private authService: AuthService,
+    private careerAi: CareerAiService,
+  ) {}
 
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
@@ -592,6 +708,84 @@ export class SimulationPage implements OnInit {
       this.selectedServices = [];
       this.feedbackText = '';
       this.isValid = false;
+      this.resetLabTracking();
+    });
+  }
+
+  private resetLabTracking(): void {
+    const n = this.currentCareer.missions.length;
+    this.labStartedAt = Date.now();
+    this.labFinishedAt = 0;
+    this.validations = new Array(n).fill(0);
+    this.missionScores = new Array(n).fill(0);
+    this.hintShown = new Array(n).fill(false);
+    this.finishing = false;
+    this.enjoyment = 0;
+    this.submitError = '';
+  }
+
+  get isAiLab(): boolean {
+    return !!AI_LABS[this.currentCareerId];
+  }
+
+  get hintsUsed(): number {
+    return this.hintShown.filter(Boolean).length;
+  }
+
+  get totalValidations(): number {
+    return this.validations.reduce((a, b) => a + b, 0);
+  }
+
+  get missionsCorrect(): number {
+    return this.missionScores.filter((s) => s === 100).length;
+  }
+
+  get labScore(): number {
+    return this.missionScores.reduce((a, b) => a + b, 0) / Math.max(1, this.missionScores.length);
+  }
+
+  get elapsedSeconds(): number {
+    return Math.max(1, Math.round(((this.labFinishedAt || Date.now()) - this.labStartedAt) / 1000));
+  }
+
+  get elapsedLabel(): string {
+    const s = this.elapsedSeconds;
+    return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`;
+  }
+
+  showHint(): void {
+    this.hintShown[this.currentMissionIndex] = true;
+  }
+
+  currentHint(): string {
+    const expected = this.currentMission.expectedServices;
+    return `${expected.length} réponses sont attendues. L’une d’elles est « ${expected[0]} ».`;
+  }
+
+  submitLab(): void {
+    this.submitting = true;
+    this.submitError = '';
+    this.careerAi.submitLabAttempt({
+      career_id: this.currentCareerId,
+      mission_count: this.currentCareer.missions.length,
+      missions_correct: this.missionsCorrect,
+      score: Math.round(this.labScore * 10) / 10,
+      duration_seconds: this.elapsedSeconds,
+      validations: Math.max(this.totalValidations, this.currentCareer.missions.length),
+      hints_used: this.hintsUsed,
+      enjoyment: this.enjoyment,
+    }).subscribe({
+      next: () => {
+        this.submitting = false;
+        this.router.navigateByUrl('/dashboard/results');
+      },
+      error: (err) => {
+        this.submitting = false;
+        const detail = err?.error;
+        this.submitError = detail && typeof detail === 'object'
+          ? Object.values(detail).flat().join(' ')
+          : 'Could not save the lab. Check that the backend is running.';
+      },
     });
   }
 
@@ -757,20 +951,44 @@ export class SimulationPage implements OnInit {
   validateArchitecture(): void {
     const expected = new Set(this.currentMission.expectedServices);
     const chosen = new Set(this.selectedServices);
-    const valid = [...expected].every((service) => chosen.has(service)) && chosen.size >= expected.size;
+    if (!chosen.size) {
+      this.isValid = false;
+      this.feedbackText = 'Sélectionnez au moins un élément avant de valider.';
+      return;
+    }
+    // Score de la mission = recouvrement entre la sélection et la bonne réponse (indice de Jaccard)
+    const common = [...chosen].filter((service) => expected.has(service)).length;
+    const score = (100 * common) / new Set([...expected, ...chosen]).size;
+    const valid = score === 100;
 
+    this.validations[this.currentMissionIndex] += 1;
+    this.missionScores[this.currentMissionIndex] = score;
     this.isValid = valid;
     this.feedbackText = valid
       ? this.currentMission.result
-      : 'Votre choix est incomplet. Sélectionnez les éléments les plus pertinents pour cette simulation.';
+      : common === expected.size
+        ? 'Les bons éléments sont là, mais certains choix en trop sont inutiles ou risqués.'
+        : 'Votre choix est incomplet. Sélectionnez les éléments les plus pertinents pour cette simulation.';
   }
 
   nextMission(): void {
+    if (!this.validations[this.currentMissionIndex]) {
+      this.isValid = false;
+      this.feedbackText = 'Validez votre réponse avant de passer à la suite.';
+      return;
+    }
+
     if (this.currentMissionIndex < this.currentCareer.missions.length - 1) {
       this.currentMissionIndex += 1;
       this.selectedServices = [];
       this.feedbackText = '';
       this.isValid = false;
+      return;
+    }
+
+    if (this.isAiLab) {
+      this.labFinishedAt = Date.now();
+      this.finishing = true;
       return;
     }
 

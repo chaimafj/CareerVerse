@@ -19,6 +19,7 @@ export interface RegisterRequest {
 export interface AuthApiResponse {
   message?: string;
   user?: any;
+  token?: string;
   detail?: string;
 }
 
@@ -29,8 +30,30 @@ export class AuthService {
   private readonly apiUrl = `${environment.apiUrl}/auth`;
   private readonly userStorageKey = 'careerverse_user';
   private readonly profileStorageKey = 'careerverse_profile';
+  private readonly tokenStorageKey = 'careerverse_token';
 
   constructor(private http: HttpClient) {}
+
+  setToken(token?: string): void {
+    if (token) {
+      localStorage.setItem(this.tokenStorageKey, token);
+    }
+  }
+
+  getToken(): string | null {
+    return localStorage.getItem(this.tokenStorageKey);
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.getToken();
+  }
+
+  logout(): void {
+    if (this.getToken()) {
+      this.http.post(`${this.apiUrl}/logout/`, {}).subscribe({ error: () => undefined });
+    }
+    this.clearCurrentUser();
+  }
 
   login(credentials: LoginRequest): Observable<AuthApiResponse> {
     return this.http.post<AuthApiResponse>(`${this.apiUrl}/login/`, credentials);
@@ -70,6 +93,7 @@ export class AuthService {
   clearCurrentUser(): void {
     localStorage.removeItem(this.userStorageKey);
     localStorage.removeItem(this.profileStorageKey);
+    localStorage.removeItem(this.tokenStorageKey);
   }
 
   setProfile(profile: any): void {

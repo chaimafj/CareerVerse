@@ -590,6 +590,7 @@ export class LoginPage {
           };
 
           this.authService.setCurrentUser(user);
+          this.authService.setToken(response?.token);
 
           const message = response.message ?? 'Login successful.';
           await this.showMessage(message);

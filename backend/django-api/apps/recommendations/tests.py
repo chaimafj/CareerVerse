@@ -99,3 +99,39 @@ class RecommendationFlowTests(TestCase):
 
         r = self.client.get('/api/recommendations/')
         self.assertEqual(r.data['top_careers'][0]['career'], 'Cybersecurity Analyst')
+
+
+class ProfileInsightsTests(TestCase):
+    def test_overrated_skill_is_flagged(self):
+        from apps.ai.insights import lab_insight
+        ratings = {'docker_k8s': 9, 'linux': 8, 'systems_thinking': 8, 'programming': 6}
+        insight = lab_insight('lab_devops_pipeline', 20, ratings)
+        self.assertEqual(insight['status'], 'overestimated')
+        self.assertGreater(insight['expected_score'], 80)
+        flagged = {s['skill'] for s in insight['skills']}
+        self.assertIn('docker_k8s', flagged)
+        self.assertTrue(all(s['direction'] == 'overestimated' for s in insight['skills']))
+
+    def test_underrated_and_consistent(self):
+        from apps.ai.insights import lab_insight
+        low = {'web_frontend': 2, 'programming': 3, 'testing_quality': 3}
+        self.assertEqual(lab_insight('lab_web_ui', 95, low)['status'], 'underestimated')
+        honest = {'web_frontend': 7, 'programming': 6, 'testing_quality': 5}
+        self.assertEqual(lab_insight('lab_web_ui', 75, honest)['status'], 'consistent')
+
+    def test_insights_endpoint(self):
+        client = APIClient()
+        token = client.post('/api/auth/register/', {
+            'username': 'sami', 'email': 'sami@example.com', 'first_name': 'Sami', 'last_name': 'K',
+            'password': 'StrongPass123!', 'password_confirm': 'StrongPass123!',
+        }, format='json').data['token']
+        client.credentials(HTTP_AUTHORIZATION='Token ' + token)
+        client.put('/api/profile/', {'self_ratings': {'docker_k8s': 9, 'linux': 8, 'systems_thinking': 8}}, format='json')
+        client.post('/api/labs/attempts/', {
+            'career_id': 'devops-engineer', 'mission_count': 3, 'missions_correct': 0, 'score': 20,
+            'duration_seconds': 600, 'validations': 9, 'hints_used': 3, 'enjoyment': 2,
+        }, format='json')
+        r = client.get('/api/insights/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data[0]['lab_key'], 'lab_devops_pipeline')
+        self.assertEqual(r.data[0]['status'], 'overestimated')

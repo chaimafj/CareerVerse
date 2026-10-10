@@ -3,9 +3,22 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.ai.insights import profile_vs_labs
 from apps.ai.predictor import ModelUnavailable
+from apps.profiles.models import Profile
 from apps.results.models import Recommendation
+from apps.simulations.views import latest_attempts
 from .services import ProfileIncomplete, RecommendationService
+
+
+class ProfileInsightsView(APIView):
+    """Pour chaque lab fait : le résultat confirme-t-il l'auto-évaluation ? Quelles compétences renforcer ?"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        scores = {key: a.score for key, a in latest_attempts(request.user).items()}
+        return Response(profile_vs_labs(profile.self_ratings, scores))
 
 
 def serialize(rec):

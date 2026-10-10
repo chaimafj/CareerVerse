@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import {
-  AI_LABS, CAREER_INFO, CareerAiService, LabAttemptsSummary, Recommendation, StudentProfile,
+  AI_LABS, CAREER_INFO, CareerAiService, LabAttemptsSummary, LabInsight, Recommendation, StudentProfile,
 } from '../../core/services/career-ai.service';
 
 /** Résultats du modèle CareerNet : état du dossier, lancement de l'analyse, top-3 et classement complet. */
@@ -57,6 +57,40 @@ import {
         </article>
       </section>
 
+      <section class="card" *ngIf="insights.length">
+        <div class="section-head">
+          <h2>Your profile vs your Career Labs</h2>
+          <small>Labs measure what you can really do. They count more than self-assessment.</small>
+        </div>
+        <div class="insights">
+          <article class="insight" *ngFor="let i of insights" [ngClass]="i.status">
+            <div class="insight-head">
+              <span class="pill">{{ statusLabel[i.status] }}</span>
+              <strong>{{ i.career }} lab</strong>
+              <span class="scores">{{ i.score | number:'1.0-0' }}/100 <small>expected from your profile: {{ i.expected_score | number:'1.0-0' }}</small></span>
+            </div>
+            <p *ngIf="i.status === 'consistent'">Your result matches your self-assessment.</p>
+            <p *ngIf="i.status === 'overestimated'">
+              Your lab result is well below what your self-assessment suggests.
+              <ng-container *ngIf="i.skills.length">Skills to reinforce:</ng-container>
+            </p>
+            <p *ngIf="i.status === 'underestimated'">
+              You did better than you think.
+              <ng-container *ngIf="i.skills.length">You can raise these ratings:</ng-container>
+            </p>
+            <ul class="gaps" *ngIf="i.skills.length">
+              <li *ngFor="let s of i.skills">
+                <strong>{{ s.label }}</strong> — you rated {{ s.self_rating }}/10, the lab suggests about {{ s.estimated_level | number:'1.0-0' }}/10
+              </li>
+            </ul>
+            <div class="insight-actions" *ngIf="i.status !== 'consistent'">
+              <button class="link-btn" type="button" (click)="openLab(i.career_id)">Redo the lab</button>
+              <button class="link-btn" type="button" routerLink="/dashboard/assessment">Update my self-assessment</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <ng-container *ngIf="recommendation as rec">
         <section class="card">
           <div class="section-head">
@@ -72,6 +106,10 @@ import {
               <h3>{{ c.career }}</h3>
               <div class="pct">{{ c.probability * 100 | number:'1.0-1' }}%</div>
               <p>{{ info(c.career).summary }}</p>
+              <p class="caution" *ngIf="labWarning(c.career) as w">
+                ⚠ Your {{ c.career }} lab scored {{ w.score | number:'1.0-0' }}/100, far below your self-assessment.
+                This choice relies mostly on your profile: redo the lab to confirm it.
+              </p>
               <div class="tags"><span *ngFor="let t of info(c.career).tags">{{ t }}</span></div>
               <button class="secondary-btn small" type="button" (click)="openLab(info(c.career).careerId)">
                 {{ hasLab(info(c.career).careerId) ? 'Retry its lab' : 'Try its lab' }}
@@ -153,6 +191,22 @@ import {
     .bar-fill { height: 100%; min-width: 2px; background: linear-gradient(90deg, #5b7dff, #7b61ff); border-radius: 99px; }
     .row-value { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
     .empty p { color: #4f607d; margin: 8px 0 0; }
+    .caution { color: #b04a17 !important; background: #fff3ec; border-radius: 10px; padding: 8px 10px; font-size: 0.88rem; }
+    .insights { display: grid; gap: 12px; }
+    .insight { border: 1px solid #dfe5f3; border-left-width: 4px; border-radius: 14px; padding: 14px 16px; background: #fff; display: grid; gap: 6px; }
+    .insight.consistent { border-left-color: #1a8f63; }
+    .insight.overestimated { border-left-color: #d9622b; background: #fff8f4; }
+    .insight.underestimated { border-left-color: #2a63c6; background: #f5f8ff; }
+    .insight-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .insight .pill { font-size: 0.75rem; font-weight: 800; padding: 3px 9px; border-radius: 99px; }
+    .consistent .pill { background: #e2f4ec; color: #127a55; }
+    .overestimated .pill { background: #fde4d8; color: #b04a17; }
+    .underestimated .pill { background: #e3ecfb; color: #1f4fa3; }
+    .scores { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .scores small { font-weight: 500; color: #5d6d8d; }
+    .insight p { margin: 0; color: #4f607d; }
+    .gaps { margin: 0; padding-left: 1.2em; color: #2b3a5c; display: grid; gap: 3px; }
+    .insight-actions { display: flex; gap: 16px; flex-wrap: wrap; }
     .status.error { color: #c2412d; font-weight: 600; background: #fdecea; border: 1px solid #f5c2bb; padding: 12px 16px; border-radius: 14px; }
     .disclaimer { margin: 0; color: #6a7a99; font-size: 0.88rem; line-height: 1.5; }
     .primary-btn, .secondary-btn { border-radius: 999px; padding: 13px 22px; font-weight: 700; cursor: pointer; font: inherit; }
@@ -174,6 +228,12 @@ export class ResultsPage implements OnInit {
   completion = 0;
   labs: LabAttemptsSummary | null = null;
   recommendation: Recommendation | null = null;
+  insights: LabInsight[] = [];
+  readonly statusLabel: Record<LabInsight['status'], string> = {
+    consistent: 'Consistent',
+    overestimated: 'Overestimated',
+    underestimated: 'Underestimated',
+  };
 
   constructor(private ai: CareerAiService, private router: Router) {}
 
@@ -182,13 +242,15 @@ export class ResultsPage implements OnInit {
       profile: this.ai.getProfile().pipe(catchError(() => of(null as StudentProfile | null))),
       labs: this.ai.getLabAttempts().pipe(catchError(() => of(null))),
       rec: this.ai.getLatestRecommendation().pipe(catchError(() => of(null))),
-    }).subscribe(({ profile, labs, rec }) => {
+      insights: this.ai.getInsights().pipe(catchError(() => of([] as LabInsight[]))),
+    }).subscribe(({ profile, labs, rec, insights }) => {
       if (!profile) {
         this.error = 'Could not reach the backend. Start it with “python manage.py runserver” on port 8000.';
       }
       this.completion = profile?.completion ?? 0;
       this.labs = labs;
       this.recommendation = rec;
+      this.insights = insights;
       this.loading = false;
     });
   }
@@ -211,6 +273,10 @@ export class ResultsPage implements OnInit {
 
   info(career: string) {
     return CAREER_INFO[career] ?? { careerId: '', icon: '★', summary: '', tags: [] };
+  }
+
+  labWarning(career: string): LabInsight | undefined {
+    return this.insights.find((i) => i.career === career && i.status === 'overestimated');
   }
 
   hasLab(careerId: string): boolean {

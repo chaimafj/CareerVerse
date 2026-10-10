@@ -57,6 +57,25 @@ export interface Recommendation {
   created_at: string;
 }
 
+export interface SkillGap {
+  skill: string;
+  label: string;
+  self_rating: number;
+  estimated_level: number;
+  direction: 'overestimated' | 'underestimated';
+}
+
+/** Ce que dit un lab par rapport à l'auto-évaluation de l'étudiant. */
+export interface LabInsight {
+  lab_key: string;
+  career: string;
+  career_id: string;
+  score: number;
+  expected_score: number;
+  status: 'overestimated' | 'underestimated' | 'consistent';
+  skills: SkillGap[];
+}
+
 /** Les 13 compétences et 5 intérêts attendus par le modèle CareerNet (mêmes clés que le backend). */
 export const SKILLS: { key: string; label: string; hint: string }[] = [
   { key: 'programming', label: 'Programming', hint: 'Writing code in any language' },
@@ -135,5 +154,9 @@ export class CareerAiService {
 
   runRecommendation(): Observable<Recommendation> {
     return this.http.post<Recommendation>(`${this.api}/recommendations/`, {});
+  }
+
+  getInsights(): Observable<LabInsight[]> {
+    return this.http.get<LabInsight[]>(`${this.api}/insights/`);
   }
 }

@@ -51,6 +51,23 @@ LABS = [
     {"key": "lab_qa_testing", "title": "QA testing", "career": "QA/Test Engineer", "career_id": "qa-engineer"},
 ]
 LAB_KEYS = [lab["key"] for lab in LABS]
+
+# Compétences mobilisées par chaque lab et leur poids (mêmes valeurs que la simulation
+# DL_CareerVerser/project/step2_generate_students.py, qui a servi à entraîner le modèle).
+LAB_SKILLS = {
+    "lab_backend_api":     {"programming": .4, "python": .2, "databases_sql": .2, "problem_solving": .2},
+    "lab_web_ui":          {"web_frontend": .6, "programming": .3, "testing_quality": .1},
+    "lab_devops_pipeline": {"docker_k8s": .4, "linux": .3, "systems_thinking": .2, "programming": .1},
+    "lab_cloud_deploy":    {"cloud": .5, "networking": .2, "linux": .15, "systems_thinking": .15},
+    "lab_security_ctf":    {"security": .5, "linux": .2, "networking": .15, "problem_solving": .15},
+    "lab_data_analysis":   {"python": .35, "math_stats": .45, "databases_sql": .2},
+    "lab_sql_database":    {"databases_sql": .6, "systems_thinking": .2, "problem_solving": .2},
+    "lab_network_config":  {"networking": .55, "linux": .25, "systems_thinking": .2},
+    "lab_qa_testing":      {"testing_quality": .55, "programming": .25, "problem_solving": .2},
+}
+# Dans la simulation : score attendu = 100 / (1 + exp(-(niveau - 5.2) * 0.9))
+LAB_SCORE_CENTER = 5.2
+LAB_SCORE_SLOPE = 0.9
 LAB_BY_CAREER_ID = {lab["career_id"]: lab for lab in LABS}
 
 # Champs du profil indispensables au modèle (hors compétences et intérêts).
